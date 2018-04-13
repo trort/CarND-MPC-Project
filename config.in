@@ -1,0 +1,14 @@
+{
+    "ref_v": 50.0,
+
+    "cte_coeff": 2.0,
+    "epsi_coeff": 3.0,
+    "v_coeff": 1.0,
+
+    "delta_coeff": 1.0,
+    "a_coeff": 1.0,
+    "vdelta_coeff": 1.0,
+
+    "d_delta_coeff": 3.0,
+    "d_a_coeff": 1.0
+}

@@ -6,6 +6,8 @@
 
 using namespace std;
 
+extern size_t N;
+
 class MPC {
  public:
   MPC();

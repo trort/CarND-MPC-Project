@@ -8,6 +8,7 @@
 #include "Eigen-3.3/Eigen/QR"
 #include "MPC.h"
 #include "json.hpp"
+#include "poly_utils.h"
 
 // for convenience
 using json = nlohmann::json;
@@ -30,39 +31,6 @@ string hasData(string s) {
     return s.substr(b1, b2 - b1 + 2);
   }
   return "";
-}
-
-// Evaluate a polynomial.
-double polyeval(Eigen::VectorXd coeffs, double x) {
-  double result = 0.0;
-  for (int i = 0; i < coeffs.size(); i++) {
-    result += coeffs[i] * pow(x, i);
-  }
-  return result;
-}
-
-// Fit a polynomial.
-// Adapted from
-// https://github.com/JuliaMath/Polynomials.jl/blob/master/src/Polynomials.jl#L676-L716
-Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
-                        int order) {
-  assert(xvals.size() == yvals.size());
-  assert(order >= 1 && order <= xvals.size() - 1);
-  Eigen::MatrixXd A(xvals.size(), order + 1);
-
-  for (int i = 0; i < xvals.size(); i++) {
-    A(i, 0) = 1.0;
-  }
-
-  for (int j = 0; j < xvals.size(); j++) {
-    for (int i = 0; i < order; i++) {
-      A(j, i + 1) = A(j, i) * xvals(j);
-    }
-  }
-
-  auto Q = A.householderQr();
-  auto result = Q.solve(yvals);
-  return result;
 }
 
 int main() {
@@ -91,6 +59,31 @@ int main() {
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
+          double current_steer = j[1]["steering_angle"];
+          double current_throttle = j[1]["throttle"];
+          double t_delay = 0.1;
+          px += v * t_delay * cos(psi);
+          py += v * t_delay * sin(psi);// * 0.447;
+          psi += - current_steer * t_delay;
+          v += current_throttle * t_delay;
+          //std::cout << "px: " << px << ", py: " << py << ", psi: " << psi << ", v: " << v << endl;
+
+          Eigen::VectorXd ptsx_transformed(ptsx.size());
+          Eigen::VectorXd ptsy_transformed(ptsx.size());
+          for(int i = 0; i < ptsx.size(); ++i){
+            double x_prime = ptsx[i] - px;
+            double y_prime = ptsy[i] - py;
+            ptsx_transformed[i] = cos(psi) * x_prime + sin(psi) * y_prime;
+            ptsy_transformed[i] = -sin(psi) * x_prime + cos(psi) * y_prime;
+          }
+
+          auto coeffs = polyfit(ptsx_transformed, ptsy_transformed, 3);
+          double cte = polyeval(coeffs, 0.0);
+          double epsi = -atan(polyderivative(coeffs, 0.0));
+
+          Eigen::VectorXd state(8);
+          state << 0.0, 0.0, 0.0, v, cte, epsi, -current_steer, current_throttle;
+          std::cout << "cte: " << cte << "; epsi: " << epsi << endl;
 
           /*
           * TODO: Calculate steering angle and throttle using MPC.
@@ -98,8 +91,10 @@ int main() {
           * Both are in between [-1, 1].
           *
           */
-          double steer_value;
-          double throttle_value;
+          auto vars = mpc.Solve(state, coeffs);
+
+          double steer_value = - vars[3 * N] / deg2rad(25);
+          double throttle_value = vars[3 * N + 1];
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
@@ -107,9 +102,9 @@ int main() {
           msgJson["steering_angle"] = steer_value;
           msgJson["throttle"] = throttle_value;
 
-          //Display the MPC predicted trajectory 
-          vector<double> mpc_x_vals;
-          vector<double> mpc_y_vals;
+          //Display the MPC predicted trajectory
+          vector<double> mpc_x_vals(vars.begin(), vars.begin() + N);
+          vector<double> mpc_y_vals(vars.begin() + N, vars.begin() + 2 * N);
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
@@ -118,8 +113,10 @@ int main() {
           msgJson["mpc_y"] = mpc_y_vals;
 
           //Display the waypoints/reference line
-          vector<double> next_x_vals;
-          vector<double> next_y_vals;
+          //vector<double> next_x_vals(ptsx_transformed.data(), ptsx_transformed.data() + ptsx_transformed.size());
+          //vector<double> next_y_vals(ptsy_transformed.data(), ptsy_transformed.data() + ptsy_transformed.size());
+          vector<double> next_x_vals(vars.begin(), vars.begin() + N);
+          vector<double> next_y_vals(vars.begin() + 2 * N, vars.begin() + 3 * N);
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
