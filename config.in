@@ -1,7 +1,7 @@
 {
-    "ref_v": 50.0,
+    "ref_v": 70.0,
 
-    "cte_coeff": 2.0,
+    "cte_coeff": 5.0,
     "epsi_coeff": 3.0,
     "v_coeff": 1.0,
 

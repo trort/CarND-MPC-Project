@@ -59,22 +59,22 @@ int main() {
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
-          double current_steer = j[1]["steering_angle"];
+          double current_steer = -1 * double(j[1]["steering_angle"]);
           double current_throttle = j[1]["throttle"];
-          double t_delay = 0.1;
-          px += v * t_delay * cos(psi);
-          py += v * t_delay * sin(psi);// * 0.447;
-          psi += - current_steer * t_delay;
-          v += current_throttle * t_delay;
+          double t_delay = 0.0;
+          double pxp = px + v * t_delay * cos(psi);
+          double pyp = py + v * t_delay * sin(psi);// * 0.447;
+          double psip = psi + current_steer * t_delay;
+          double vp = v + current_throttle * t_delay;
           //std::cout << "px: " << px << ", py: " << py << ", psi: " << psi << ", v: " << v << endl;
 
           Eigen::VectorXd ptsx_transformed(ptsx.size());
           Eigen::VectorXd ptsy_transformed(ptsx.size());
           for(int i = 0; i < ptsx.size(); ++i){
-            double x_prime = ptsx[i] - px;
-            double y_prime = ptsy[i] - py;
-            ptsx_transformed[i] = cos(psi) * x_prime + sin(psi) * y_prime;
-            ptsy_transformed[i] = -sin(psi) * x_prime + cos(psi) * y_prime;
+            double x_prime = ptsx[i] - pxp;
+            double y_prime = ptsy[i] - pyp;
+            ptsx_transformed[i] = cos(psip) * x_prime + sin(psip) * y_prime;
+            ptsy_transformed[i] = -sin(psip) * x_prime + cos(psip) * y_prime;
           }
 
           auto coeffs = polyfit(ptsx_transformed, ptsy_transformed, 3);
@@ -82,8 +82,8 @@ int main() {
           double epsi = -atan(polyderivative(coeffs, 0.0));
 
           Eigen::VectorXd state(8);
-          state << 0.0, 0.0, 0.0, v, cte, epsi, -current_steer, current_throttle;
-          std::cout << "cte: " << cte << "; epsi: " << epsi << endl;
+          state << px - pxp, py - pyp, psi - psip, vp, cte, epsi, current_steer, current_throttle;
+          std::cout << "Current steer: " << current_steer << "; throttle: " << current_throttle << endl;
 
           /*
           * TODO: Calculate steering angle and throttle using MPC.
@@ -102,9 +102,11 @@ int main() {
           msgJson["steering_angle"] = steer_value;
           msgJson["throttle"] = throttle_value;
 
+          std::cout << "Desired steer: " << -steer_value * deg2rad(25) << "; throttle: " << throttle_value << endl;
+
           //Display the MPC predicted trajectory
-          vector<double> mpc_x_vals(vars.begin(), vars.begin() + N);
-          vector<double> mpc_y_vals(vars.begin() + N, vars.begin() + 2 * N);
+          vector<double> mpc_x_vals(vars.begin() + 1, vars.begin() + N);
+          vector<double> mpc_y_vals(vars.begin() + N + 1, vars.begin() + 2 * N);
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
@@ -115,8 +117,8 @@ int main() {
           //Display the waypoints/reference line
           //vector<double> next_x_vals(ptsx_transformed.data(), ptsx_transformed.data() + ptsx_transformed.size());
           //vector<double> next_y_vals(ptsy_transformed.data(), ptsy_transformed.data() + ptsy_transformed.size());
-          vector<double> next_x_vals(vars.begin(), vars.begin() + N);
-          vector<double> next_y_vals(vars.begin() + 2 * N, vars.begin() + 3 * N);
+          vector<double> next_x_vals(vars.begin() + 1, vars.begin() + N);
+          vector<double> next_y_vals(vars.begin() + 2 * N + 1, vars.begin() + 3 * N);
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
