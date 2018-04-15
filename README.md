@@ -1,5 +1,55 @@
 # CarND-Controls-MPC
-Self-Driving Car Engineer Nanodegree Program
+
+This is project 5 of Udacity Self-driving car Nanodegree term 2. The goal is to write a Model Predictive Controller (MPC) to drive a car in the simulator. A sample video of the implemented MPC driving the car can be found [here](./MPC_driving_example.mov).
+
+## Model description
+
+### The states
+At each timestamp, there are 6 states used:
+* `x`: x position in car coordinate
+* `y`: y position in car coordinate
+* `psi`: car orientation
+* `v`: car speed
+* `cte`: error between the actual y position and desired y position
+* `epsi`: error between the actual car orientation and desired car orientation
+
+Because all values are in the car coordinate, the initial values of `x, y, psi` should always be 0.
+
+### The actuators
+At each timestamp, there are 2 actuators:
+* `delta`: the steering angle in [-25, 25 degrees], and
+* `a`: the throttle (acceleration) value in [-1, 1]
+
+### The update equations
+The states at time `t + 1` depends on the states at time `t` and the actuators at time `t`. The MPC uses the simple kinematic model.
+Here are the update equations of the states:
+```
+x1 = (x0 + v0 * CppAD::cos(psi0) * dt);
+y1 = (y0 + v0 * CppAD::sin(psi0) * dt);
+psi1 = (psi0 + v0 * delta / Lf * dt);
+v1 = (v0 + a * dt);
+cte1 = ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
+epsi1 = ((psi0 - psides0) + v0 * delta / Lf * dt);
+```
+
+### The cost function
+The MPC controller finds the optimal actuator values by minimizing a pre-determined cost function. The cost function minimizes the error between the actual and desired positions, orientation, and speed. It also minimizes the use of actuators and the gap between sequential actuator values to make the car drive smoothly. The weighting of different terms are manually tuned.
+
+## Implementation Details
+
+### Determination of N & dt
+Since there is a 0.1s delay before sending the actuator values to the car, there is no need to use small dt values. So I only tried to 0.1 and 0.05 for dt. The N value is determined so that the distance `N * dt` is long enough for the car to see and react to a corner (~ 0.6s), and not too long for the optimizer since only the first actuator values will be used. I tried a few different values, both `N = 12, dt = 0.05` and `N = 8, dt = 0.1` would work at reference speed `ref_v = 70`. The final implementation used `N = 12, dt = 0.05`
+NOTE: the `idx_delay` value needs to be updated according to `dt` value.
+
+### MPC preprocessing and polynomial fitting
+The waypoints need to be preprocessed before passing to the controller. First, the waypoints are given in the map coordinate system, but the car thinks in the car coordinate system, so all waypoints are first translated to the car coordinate system.
+Second, the waypoints are a few discrete points, and the controller needs to know the desired y position and psi at any x position. This is done by a 3rd order polynomial fitting of the waypoints, and passing the polynomial coefficients to the controller. The desired y position can then be calculated from the polynomial function and the desired psi is arctan of the polynomial derivative.
+
+### Latency
+In this project, the simulator is set to have a 0.1s delay before sending the actuator values to the car. That is to say, at the first 2 timestamps (assuming `dt = 0.05`), the actuator would stay at the current values, and can only change from the 3rd timestamp. To handle this constraint, I passed the current actuator values to the optimizer as the initial state (a additional pair of actuator state values at index 0), and added additional `2 * idx_delay` constraints to make the first `idx_delay` actuator values the same as the initial state. Now the actuator can only be updated after the delay, and the first updated actuator values will be sent to the car.
+
+### Parameter tuning
+Similar to the PID controller, the MPC controller also has several parameters that need tuning. But unlike the PID controller, the MPC controller relies less on those parameters and has a much larger tolerance on those parameters. Here I initialized all the values to 1, increased the coefficients for delta because of the the smaller value range of delta, and added more weight to cte error and psi error to confine the car on the desired route. With the current values, the car runs perfectly when speed is 70 mph and can even loop around at 100 mph.
 
 ---
 
