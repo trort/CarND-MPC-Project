@@ -33,6 +33,14 @@ string hasData(string s) {
   return "";
 }
 
+vector<double> mapCoordinate2Car(double x, double y, double car_x, double car_y, double car_psi){
+  double x_prime = x - car_x;
+  double y_prime = y - car_y;
+  double transformed_x = cos(car_psi) * x_prime + sin(car_psi) * y_prime;
+  double transformed_y = -sin(car_psi) * x_prime + cos(car_psi) * y_prime;
+  return {transformed_x, transformed_y};
+}
+
 int main() {
   uWS::Hub h;
 
@@ -66,10 +74,9 @@ int main() {
           Eigen::VectorXd ptsx_transformed(ptsx.size());
           Eigen::VectorXd ptsy_transformed(ptsx.size());
           for(int i = 0; i < ptsx.size(); ++i){
-            double x_prime = ptsx[i] - px;
-            double y_prime = ptsy[i] - py;
-            ptsx_transformed[i] = cos(psi) * x_prime + sin(psi) * y_prime;
-            ptsy_transformed[i] = -sin(psi) * x_prime + cos(psi) * y_prime;
+            vector<double> transformed = mapCoordinate2Car(ptsx[i], ptsy[i], px, py, psi);
+            ptsx_transformed[i] = transformed[0];
+            ptsy_transformed[i] = transformed[1];
           }
 
           auto coeffs = polyfit(ptsx_transformed, ptsy_transformed, 3);
@@ -89,6 +96,10 @@ int main() {
           double steer_value = vars[2 * N];
           double throttle_value = vars[2 * N + 1];
 
+          double delayed_x = vars[2 * N + 2];
+          double delayed_y = vars[2 * N + 3];
+          double delayed_psi = vars[2 * N + 4];
+
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
@@ -98,8 +109,15 @@ int main() {
           std::cout << "Desired steer: " << steer_value << "; throttle: " << throttle_value << endl;
 
           //Display the MPC predicted trajectory
-          vector<double> mpc_x_vals(vars.begin(), vars.begin() + N);
-          vector<double> mpc_y_vals(vars.begin() + N, vars.begin() + 2 * N);
+          vector<double> mpc_x_vals(N);
+          vector<double> mpc_y_vals(N);
+          for(int i = 0; i < N; i++){
+            vector<double> mpc_position = mapCoordinate2Car(
+              vars[i], vars[i + N], delayed_x, delayed_y, delayed_psi
+            );
+            mpc_x_vals[i] = mpc_position[0];
+            mpc_y_vals[i] = mpc_position[1];
+          }
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
@@ -111,8 +129,11 @@ int main() {
           vector<double> next_x_vals(12);
           vector<double> next_y_vals(12);
           for(int i = 0; i < 12; i++){
-            next_x_vals[i] = i * 5.0;
-            next_y_vals[i] = polyeval(coeffs, i * 5.0);
+            vector<double> next_position = mapCoordinate2Car(
+              i * 5.0, polyeval(coeffs, i * 5.0), delayed_x, delayed_y, delayed_psi
+            );
+            next_x_vals[i] = next_position[0];
+            next_y_vals[i] = next_position[1];
           }
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system

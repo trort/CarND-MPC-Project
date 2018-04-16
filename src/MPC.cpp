@@ -264,7 +264,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
 
   // The variables can be accessed with
   // `solution.x[i]`.
-  std::vector<double> solution_results(N * 2 + 2);
+  std::vector<double> solution_results(N * 2 + 5);
   // Return the predicted car trace
   for(int i = 0; i < N; ++i){
     solution_results[i] = solution.x[x_start + i];
@@ -273,5 +273,8 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   // Return the first actuator values after the delay
   solution_results[N * 2] = solution.x[delta_start + idx_delay];
   solution_results[1 + N * 2] = solution.x[a_start + idx_delay];
+  solution_results[2 + N * 2] = solution.x[x_start + idx_delay - 1];
+  solution_results[3 + N * 2] = solution.x[y_start + idx_delay - 1];
+  solution_results[4 + N * 2] = solution.x[psi_start + idx_delay - 1];
   return solution_results;
 }
